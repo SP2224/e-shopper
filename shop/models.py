@@ -1,71 +1,63 @@
 from django.db import models
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
-
+from django.contrib.auth.models import User
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.utils.html import format_html
 
 # Create your models here.
-class OurUserProfileManager(BaseUserManager):
-    use_in_migrations = True
-
-    def create_user(self, name, mobile_no, username, email, password, **extra_fields):
-        if not name:
-            raise ValueError("User must have a name.")
-        elif not mobile_no:
-            raise ValueError("User must have a mobile number.")
-        elif not username:
-            raise ValueError("User must use a username.")
-        elif not email:
-            raise ValueError("User must have an email address.")
-        elif not password:
-            raise ValueError("User must use password.")
-        email = self.normalize_email(email)
-        user = self.model(name=name, username=username, email=email, **extra_fields)
-        user.set_password(password)
-        user.save(using=self._db)
-        return user
-
-    def create_superuser(self, name, mobile_no, username, email, password, **extra_fields):
-        user = self.create_user(email, mobile_no, username, name, password, **extra_fields)
-        user.is_superuser = True
-        user.is_staff = True
-        user.save(using=self._db)
-        return user     
-
-class OurUser(AbstractBaseUser, PermissionsMixin):
-    name = models.CharField(max_length=255)
-    username = models.CharField(max_length=100, unique=True)
-    email = models.EmailField(max_length=255, unique=True)
+class Profile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
     mobile_no = models.CharField(max_length=50)
-    is_active = models.BooleanField(default=True)
-    is_staff = models.BooleanField(default=False)
-
-    objects = OurUserProfileManager()
-
-    USERNAME_FIELD = 'username' 
-    REQUIRED_FIELDS = ['name', 'email', 'password', 'mobile_no']
-
-    def get_full_name(self):
-        return self.name
-
-    def get_short_name(self):
-        return self.name
+    address = models.CharField(max_length=30, blank=True)
+    
 
     def __str__(self):
-        return self.name
+        return self.user
 
-
-
+@receiver(post_save, sender=User)                                   ###################################
+def create_user_profile(sender, instance, created, **kwargs):       # Thus, we are hooking the methods
+    if created:                                                     # to the User model,
+        Profile.objects.create(user=instance)                       # whenever a save event occurs
+                                                                    ###################################
+@receiver(post_save, sender=User)
+def save_user_profile(sender, instance, **kwargs):
+    instance.profile.save()
 
 class Product(models.Model):
     PRODUCT_CHOICES = [
         
-        ('Cosmetics', 'Cosmetics'),
-        ('Digital', 'Digital'),
-        ('Electronics', 'Electronics'),
+        ('Cosmetics', (
+            ('Hair Care', 'Hair Care'),
+            ('Skin Care', 'Skin Care'),
+            ('Beauty Care', 'Beauty Care'),
+            )
+        ),
+        ('Digital', (
+            ('E-Book', 'E-Book'),
+            ('Kindle Edition', 'Kindle Edition'),
+            ('Software', 'Software'),
+            )
+        ),
+        ('Electronics', (
+            ('Monitor', 'Monitor'),
+            ('Mouse', 'Mouse'),
+            ('Keyboard', 'Keyboard'),
+            ('Headphone', 'Headphone'),
+            ('Earphone', 'Earphone'),
+            ('Laptop', 'Laptop'),
+            ('TV', 'TV'),
+            ('Pen Drive', 'Pen Drive'),
+            ('Router', 'Router'),
+            ('AC', 'AC'),
+            ('Tablets', 'Tablets'),
+            ('Camera', 'Camera'),
+            )
+        ),
         ('Bag', 'Bag'),
         ('Wallet', 'Wallet'),
         ('T-Shirt', 'T-Shirt'),
         ('Jeans', 'Jeans'),
-        ('Wrist-Watch', 'Wrist Watch'),
+        ('Wrist Watch', 'Wrist Watch'),
         ('Belt', 'Belt'),
         ('Sunglass', 'Sunglass'),
         ('Shirt', 'Shirt'),
@@ -74,39 +66,14 @@ class Product(models.Model):
         ('Book', 'Book'),
         ('None', 'None'),
     ]
-
-    
+            
     TYPE_CHOICES = [
-            ('Hair-Care', 'Hair Care'),
-            ('Skin-Care', 'Skin Care'),
-            ('Beauty-Care', 'Beauty Care'),
-            ('Health-Care', 'Health Care'),
-            ('Wireless', 'Wireless'),
-            ('Wired', 'Wired'),
-            ('SLR', 'SLR'),
-            ('DSLR', 'DSLR'),
-            ('None', 'None')
-    ]
+        ('Wired', 'Wired'),
+        ('Wireless', 'Wireless'),
+        ('SLR', 'SLR'),
+        ('DSLR', 'DSLR'),
+        ('None', 'None'),
 
-    
-    SUBPRODUCT_CHOICES = [
-            ('E-Book', 'E-Book'),
-            ('Kindle-Edition', 'Kindle Edition'),
-            ('Software', 'Software'),
-            ('None', 'None'),
-            ('Monitor', 'Monitor'),
-            ('Mouse', 'Mouse'),
-            ('Keyboard', 'Keyboard'),
-            ('Headphone', 'Headphone'),
-            ('Earphone', 'Earphone'),
-            ('Laptop', 'Laptop'),
-            ('TV', 'TV'),
-            ('Pen-Drive', 'Pen Drive'),
-            ('Router', 'Router'),
-            ('AC', 'AC'),
-            ('Tablets', 'Tablets'),
-            ('Camera', 'Camera'),
-            ('None', 'None')
     ]
 
     FOR_CHOICES = [
@@ -115,16 +82,25 @@ class Product(models.Model):
         ('Kids', 'Kids'),
         ('Boys', 'Boys'),
         ('Girls', 'Girls'),
+        ('All', 'All'),
         ('None', 'None'),
     ]
 
     title = models.CharField(max_length=255, blank=True)
     price = models.DecimalField(max_digits=8, decimal_places=2, blank=True)
+    offer = models.BooleanField(default=False, null=True)
     description = models.TextField(blank=True, null=True)
-    category = models.CharField(choices=PRODUCT_CHOICES, max_length=20, default=None)
-    sub_category = models.CharField(choices=SUBPRODUCT_CHOICES, max_length=15, default=None)
-    category_type = models.CharField(choices=TYPE_CHOICES, max_length=12, default=None)
-    usable_by = models.CharField(choices=FOR_CHOICES, max_length=6, default=None)
+    category = models.CharField(
+        choices=PRODUCT_CHOICES, 
+        max_length=20,
+        blank=True
+    )
+    sub_category = models.CharField(
+        choices=TYPE_CHOICES, 
+        max_length=20,
+        blank=True
+    )
+    usable_by = models.CharField(choices=FOR_CHOICES, max_length=6, blank=True)
     quantity = models.IntegerField(blank=True, null=True)
     image = models.ImageField(upload_to='products', blank=True)
     added_at = models.DateTimeField(auto_now=True)
@@ -132,3 +108,10 @@ class Product(models.Model):
 
     def __str__(self):
         return self.title
+
+    def show_image(self):
+        return format_html('<img src="/media/%s" width="50" />'%self.image)
+
+    
+
+    
