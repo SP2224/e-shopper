@@ -8,11 +8,9 @@ from django.utils.html import format_html
 class Profile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     mobile_no = models.CharField(max_length=50)
-    address = models.CharField(max_length=30, blank=True)
+    address = models.CharField(max_length=100, blank=True)
     
 
-    def __str__(self):
-        return self.user
 
 @receiver(post_save, sender=User)                                   ###################################
 def create_user_profile(sender, instance, created, **kwargs):       # Thus, we are hooking the methods
